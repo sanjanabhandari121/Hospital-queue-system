@@ -28,7 +28,7 @@ function DoctorDashboard() {
 
   useEffect(() => {
     if (!profile) return;
-    const socket = io('http://localhost:5000');
+    const socket = io('https://hospital-queue-system-gpgp.onrender.com');
     socket.emit('joinDoctorRoom', profile._id);
     socket.on('queueUpdated', (s) => setLiveState(s));
     return () => socket.disconnect();

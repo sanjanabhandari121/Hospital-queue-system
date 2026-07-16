@@ -27,7 +27,7 @@ function PatientDashboard() {
 
   useEffect(() => {
     if (liveTokens.length === 0) return;
-    const socket = io('http://localhost:5000');
+    const socket = io('https://hospital-queue-system-gpgp.onrender.com');
     liveTokens.forEach(t => { if (t.liveMetrics?.doctorId) socket.emit('joinDoctorRoom', t.liveMetrics.doctorId); });
     socket.on('queueUpdated', () => loadDashboard());
     return () => socket.disconnect();
