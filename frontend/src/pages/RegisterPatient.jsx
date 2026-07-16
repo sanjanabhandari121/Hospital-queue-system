@@ -17,7 +17,7 @@ function RegisterPatient() {
     setError('');
     setLoading(true);
     try {
-      const res = await api.post('/auth/register-patient', form);
+      const res = await api.post('/api/auth/register-patient', form);
       if (res.data.success) {
         localStorage.setItem('token', res.data.token);
         setUser(res.data.user);
