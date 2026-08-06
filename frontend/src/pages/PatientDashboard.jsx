@@ -2,24 +2,38 @@ import React, { useState, useEffect, useContext } from 'react';
 import api from '../utils/api';
 import { AuthContext } from '../App';
 import { io } from 'socket.io-client';
+import {
+  Ticket, CalendarPlus, ClipboardList, Bell, AlertCircle,
+  CheckCircle2, Clock, Users, XCircle, Loader2, ArrowRight, Stethoscope
+} from 'lucide-react';
 
 function PatientDashboard() {
   const { user } = useContext(AuthContext);
-  const [liveTokens, setLiveTokens] = useState([]);
-  const [history, setHistory] = useState([]);
+  const [liveTokens, setLiveTokens]       = useState([]);
+  const [history, setHistory]             = useState([]);
   const [notifications, setNotifications] = useState([]);
-  const [hospitals, setHospitals] = useState([]);
-  const [departments, setDepartments] = useState([]);
-  const [doctors, setDoctors] = useState([]);
-  const [bookingForm, setBookingForm] = useState({ hospitalId: '', departmentId: '', doctorId: '', dateStr: new Date().toISOString().split('T')[0], symptoms: '' });
-  const [uiError, setUiError] = useState('');
+  const [hospitals, setHospitals]         = useState([]);
+  const [departments, setDepartments]     = useState([]);
+  const [doctors, setDoctors]             = useState([]);
+  const [bookingForm, setBookingForm]     = useState({
+    hospitalId: '', departmentId: '', doctorId: '',
+    dateStr: new Date().toISOString().split('T')[0], symptoms: ''
+  });
+  const [uiError, setUiError]     = useState('');
   const [uiSuccess, setUiSuccess] = useState('');
   const [activeTab, setActiveTab] = useState('queue');
+  const [booking, setBooking]     = useState(false);
+
+  // Doctor availability state
+  const [availDoctors, setAvailDoctors]   = useState([]);
+  const [availDate, setAvailDate]         = useState(new Date().toISOString().split('T')[0]);
+  const [availDeptFilter, setAvailDeptFilter] = useState('');
+  const [availLoading, setAvailLoading]   = useState(false);
 
   useEffect(() => {
     loadDashboard();
     loadTopology();
-    const socket = io('http://localhost:5000');
+    const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000');
     socket.emit('joinUserRoom', user.id);
     socket.on('notificationReceived', () => { loadDashboard(); });
     return () => socket.disconnect();
@@ -27,7 +41,7 @@ function PatientDashboard() {
 
   useEffect(() => {
     if (liveTokens.length === 0) return;
-    const socket = io('https://hospital-queue-system-gpgp.onrender.com');
+    const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000');
     liveTokens.forEach(t => { if (t.liveMetrics?.doctorId) socket.emit('joinDoctorRoom', t.liveMetrics.doctorId); });
     socket.on('queueUpdated', () => loadDashboard());
     return () => socket.disconnect();
@@ -61,6 +75,21 @@ function PatientDashboard() {
     } catch (e) {}
   };
 
+  const loadAvailability = async (date, deptId) => {
+    setAvailLoading(true);
+    try {
+      const params = new URLSearchParams({ dateStr: date });
+      if (deptId) params.append('departmentId', deptId);
+      const res = await api.get(`/patient/doctors/availability?${params}`);
+      setAvailDoctors(res.data.data);
+    } catch (e) {}
+    setAvailLoading(false);
+  };
+
+  useEffect(() => {
+    if (activeTab === 'doctors') loadAvailability(availDate, availDeptFilter);
+  }, [activeTab, availDate, availDeptFilter]);
+
   const handleHospitalChange = async (e) => {
     const id = e.target.value;
     setBookingForm({ ...bookingForm, hospitalId: id, departmentId: '', doctorId: '' });
@@ -72,16 +101,19 @@ function PatientDashboard() {
   const handleBook = async (e) => {
     e.preventDefault();
     setUiError(''); setUiSuccess('');
+    setBooking(true);
     try {
       const res = await api.post('/patient/appointments', bookingForm);
       if (res.data.success) {
         setUiSuccess(`Booked! Your token is #${res.data.data.tokenNumber}`);
         setBookingForm({ hospitalId: '', departmentId: '', doctorId: '', dateStr: new Date().toISOString().split('T')[0], symptoms: '' });
         loadDashboard();
+        setTimeout(() => setActiveTab('queue'), 1500);
       }
     } catch (err) {
       setUiError(err.response?.data?.error || 'Failed to book appointment.');
     }
+    setBooking(false);
   };
 
   const handleCancel = async (id) => {
@@ -90,88 +122,103 @@ function PatientDashboard() {
     loadDashboard();
   };
 
-  const filteredDoctors = doctors.filter(d => d.hospital?._id === bookingForm.hospitalId && d.department?._id === bookingForm.departmentId);
+  const filteredDoctors = doctors.filter(d =>
+    d.hospital?._id === bookingForm.hospitalId && d.department?._id === bookingForm.departmentId
+  );
 
-  const statusConfig = {
-    Serving: { bg: 'from-emerald-500 to-teal-500', badge: 'bg-emerald-100 text-emerald-700', label: "🟢 It's Your Turn!", icon: '🔔' },
-    Scheduled: { bg: 'from-blue-500 to-indigo-500', badge: 'bg-blue-100 text-blue-700', label: '🔵 In Queue', icon: '⏳' },
-    Skipped: { bg: 'from-amber-500 to-orange-500', badge: 'bg-amber-100 text-amber-700', label: '🟡 Skipped', icon: '⚠️' },
+  const STATUS_CONFIG = {
+    Serving:   { bar: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-700', label: "It's your turn", dot: 'bg-emerald-500' },
+    Scheduled: { bar: 'bg-blue-500',    badge: 'bg-blue-50 text-blue-700',       label: 'In queue',       dot: 'bg-blue-500' },
+    Skipped:   { bar: 'bg-amber-500',   badge: 'bg-amber-50 text-amber-700',     label: 'Skipped',        dot: 'bg-amber-500' },
   };
 
+  const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
   const tabs = [
-    { id: 'queue', label: 'My Queue', icon: '🎫' },
-    { id: 'book', label: 'Book Appointment', icon: '📅' },
-    { id: 'history', label: 'History', icon: '📋' },
+    { id: 'queue',   label: 'My Queue',         icon: Ticket },
+    { id: 'book',    label: 'Book Appointment',  icon: CalendarPlus },
+    { id: 'history', label: 'History',           icon: ClipboardList },
+    { id: 'doctors', label: 'Doctor Availability', icon: Stethoscope },
   ];
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-6 text-white shadow-lg shadow-blue-200">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-blue-200 text-sm font-medium">Welcome back,</p>
-            <h1 className="text-2xl font-extrabold mt-0.5">{user?.name}</h1>
-          </div>
-          <div className="text-right">
-            <div className="text-3xl font-extrabold">{liveTokens.length}</div>
-            <div className="text-blue-200 text-xs font-medium">Active Appointment{liveTokens.length !== 1 ? 's' : ''}</div>
-          </div>
+    <div className="max-w-7xl mx-auto space-y-6 animate-fade-in">
+
+      {/* Page header */}
+      <div className="flex items-start justify-between flex-wrap gap-4 pt-2">
+        <div>
+          <p className="text-xs font-medium text-slate-400 mb-1">Patient Portal</p>
+          <h1 className="page-title">Welcome back, {user?.name?.split(' ')[0]}</h1>
+        </div>
+        <div className="flex items-center gap-2 bg-white border border-slate-100 rounded-xl px-3.5 py-2.5 shadow-sm">
+          <Ticket size={13} className="text-slate-400" />
+          <span className="text-sm font-semibold text-slate-800">{liveTokens.length}</span>
+          <span className="text-xs text-slate-400">active appointment{liveTokens.length !== 1 ? 's' : ''}</span>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div className="lg:col-span-2 space-y-4">
+
           {/* Tabs */}
-          <div className="flex gap-1 bg-white rounded-2xl p-1.5 border border-slate-100 shadow-sm">
+          <div className="tab-bar w-fit">
             {tabs.map(t => (
               <button key={t.id} onClick={() => setActiveTab(t.id)}
-                className={`flex-1 flex items-center justify-center gap-2 text-xs font-semibold py-2.5 rounded-xl transition-all ${activeTab === t.id ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
-                <span>{t.icon}</span> {t.label}
+                className={activeTab === t.id ? 'tab-item-active' : 'tab-item'}>
+                <t.icon size={13} />
+                {t.label}
               </button>
             ))}
           </div>
 
-          {/* Queue Tab */}
+          {/* ── Queue Tab ── */}
           {activeTab === 'queue' && (
-            <div className="space-y-4">
+            <div className="space-y-3 animate-fade-in">
               {liveTokens.length === 0 ? (
-                <div className="card p-10 text-center">
-                  <div className="text-5xl mb-4">🎫</div>
-                  <p className="font-bold text-slate-700">No active appointments</p>
-                  <p className="text-sm text-slate-400 mt-1">Book one to join a queue</p>
-                  <button onClick={() => setActiveTab('book')} className="btn-primary mt-4 inline-flex">Book Now</button>
+                <div className="card p-12 text-center">
+                  <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
+                    <Ticket size={20} className="text-slate-300" />
+                  </div>
+                  <p className="text-sm font-medium text-slate-700">No active appointments</p>
+                  <p className="text-xs text-slate-400 mt-1">Book an appointment to join a queue</p>
+                  <button onClick={() => setActiveTab('book')} className="btn-primary mt-5 mx-auto">
+                    Book now <ArrowRight size={13} />
+                  </button>
                 </div>
               ) : liveTokens.map(token => {
-                const cfg = statusConfig[token.status] || statusConfig.Scheduled;
+                const cfg = STATUS_CONFIG[token.status] || STATUS_CONFIG.Scheduled;
                 return (
                   <div key={token.appointmentId} className="card overflow-hidden">
-                    <div className={`bg-gradient-to-r ${cfg.bg} p-5 text-white`}>
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="text-white/70 text-xs font-medium">Doctor</p>
-                          <p className="font-bold text-lg leading-tight">{token.doctorName}</p>
-                          <p className="text-white/70 text-xs mt-0.5">{token.hospitalName} · {token.departmentName}</p>
-                        </div>
-                        <span className="bg-white/20 text-white text-xs font-bold px-3 py-1 rounded-full">{cfg.label}</span>
-                      </div>
-                    </div>
+                    <div className={`h-1 ${cfg.bar}`} />
                     <div className="p-5">
+                      <div className="flex items-start justify-between mb-4">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-800">{token.doctorName}</p>
+                          <p className="text-xs text-slate-400 mt-0.5">{token.hospitalName} · {token.departmentName}</p>
+                        </div>
+                        <span className={`badge ${cfg.badge} flex items-center gap-1.5`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${token.status === 'Serving' ? 'live-dot' : ''}`} />
+                          {cfg.label}
+                        </span>
+                      </div>
+
                       <div className="grid grid-cols-3 gap-3 mb-4">
                         {[
-                          { label: 'Your Token', value: `#${token.tokenNumber}`, color: 'text-slate-800' },
-                          { label: 'People Ahead', value: token.status === 'Serving' ? '0' : token.queuePosition > 0 ? token.queuePosition - 1 : '-', color: 'text-blue-600' },
-                          { label: 'Est. Wait', value: token.status === 'Serving' ? 'Now!' : `${token.estimatedWaitMinutes}m`, color: 'text-indigo-600' },
+                          { label: 'Your Token',    value: `#${token.tokenNumber}`,                                                                    color: 'text-slate-900' },
+                          { label: 'People Ahead',  value: token.status === 'Serving' ? '0' : token.queuePosition > 0 ? token.queuePosition - 1 : '—', color: 'text-blue-600' },
+                          { label: 'Est. Wait',     value: token.status === 'Serving' ? 'Now!' : `${token.estimatedWaitMinutes}m`,                     color: 'text-slate-700' },
                         ].map(s => (
                           <div key={s.label} className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
-                            <p className="text-[10px] uppercase text-slate-400 font-bold mb-1">{s.label}</p>
-                            <p className={`text-xl font-extrabold ${s.color}`}>{s.value}</p>
+                            <p className="text-[10px] text-slate-400 font-medium mb-1">{s.label}</p>
+                            <p className={`text-lg font-semibold ${s.color}`}>{s.value}</p>
                           </div>
                         ))}
                       </div>
+
                       <div className="flex justify-between items-center">
                         <p className="text-xs text-slate-400">{token.liveMetrics?.waiting || 0} patient(s) in queue</p>
-                        <button onClick={() => handleCancel(token.appointmentId)} className="text-xs font-semibold text-red-500 hover:bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg transition-all">
+                        <button onClick={() => handleCancel(token.appointmentId)}
+                          className="text-xs font-medium text-red-500 hover:bg-red-50 border border-red-100 px-3 py-1.5 rounded-lg transition-all duration-150">
                           Cancel
                         </button>
                       </div>
@@ -182,25 +229,37 @@ function PatientDashboard() {
             </div>
           )}
 
-          {/* Book Tab */}
+          {/* ── Book Tab ── */}
           {activeTab === 'book' && (
-            <div className="card p-6">
+            <div className="card p-6 animate-fade-in">
               <h3 className="section-title mb-5">Book an Appointment</h3>
-              {uiError && <div className="bg-red-50 text-red-600 border border-red-200 p-3 rounded-xl text-xs font-medium mb-4 flex gap-2"><span>⚠️</span>{uiError}</div>}
-              {uiSuccess && <div className="bg-emerald-50 text-emerald-700 border border-emerald-200 p-3 rounded-xl text-xs font-medium mb-4 flex gap-2"><span>✅</span>{uiSuccess}</div>}
+
+              {uiError && (
+                <div className="flex items-start gap-2.5 bg-red-50 border border-red-100 text-red-700 p-3 rounded-xl text-xs font-medium mb-4">
+                  <AlertCircle size={13} className="shrink-0 mt-px" /> {uiError}
+                </div>
+              )}
+              {uiSuccess && (
+                <div className="flex items-start gap-2.5 bg-emerald-50 border border-emerald-100 text-emerald-700 p-3 rounded-xl text-xs font-medium mb-4">
+                  <CheckCircle2 size={13} className="shrink-0 mt-px" /> {uiSuccess}
+                </div>
+              )}
+
               <form onSubmit={handleBook} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="label">Hospital</label>
                     <select required value={bookingForm.hospitalId} onChange={handleHospitalChange} className="input">
-                      <option value="">Select Hospital</option>
+                      <option value="">Select hospital</option>
                       {hospitals.map(h => <option key={h._id} value={h._id}>{h.name}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="label">Department</label>
-                    <select required value={bookingForm.departmentId} onChange={e => setBookingForm({ ...bookingForm, departmentId: e.target.value, doctorId: '' })} disabled={!bookingForm.hospitalId} className="input disabled:bg-slate-50 disabled:text-slate-400">
-                      <option value="">Select Department</option>
+                    <select required value={bookingForm.departmentId}
+                      onChange={e => setBookingForm({ ...bookingForm, departmentId: e.target.value, doctorId: '' })}
+                      disabled={!bookingForm.hospitalId} className="input disabled:opacity-50">
+                      <option value="">Select department</option>
                       {departments.map(d => <option key={d._id} value={d._id}>{d.name}</option>)}
                     </select>
                   </div>
@@ -208,81 +267,144 @@ function PatientDashboard() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="label">Doctor</label>
-                    <select required value={bookingForm.doctorId} onChange={e => setBookingForm({ ...bookingForm, doctorId: e.target.value })} disabled={!bookingForm.departmentId} className="input disabled:bg-slate-50 disabled:text-slate-400">
-                      <option value="">Select Doctor</option>
+                    <select required value={bookingForm.doctorId}
+                      onChange={e => setBookingForm({ ...bookingForm, doctorId: e.target.value })}
+                      disabled={!bookingForm.departmentId} className="input disabled:opacity-50">
+                      <option value="">Select doctor</option>
                       {filteredDoctors.map(doc => (
                         <option key={doc._id} value={doc._id}>
-                          {doc.user?.name} ({doc.specialization}) — {doc.slotPreference || 'Full Day'}{doc.isOnLeave ? ' ⚠ On Leave' : ''}
+                          {doc.user?.name} ({doc.specialization}){doc.isOnLeave ? ' — On Leave' : ''}
                         </option>
                       ))}
                     </select>
                   </div>
                   <div>
                     <label className="label">Date</label>
-                    <input type="date" required value={bookingForm.dateStr} onChange={e => setBookingForm({ ...bookingForm, dateStr: e.target.value })} className="input" />
+                    <input type="date" required value={bookingForm.dateStr}
+                      onChange={e => setBookingForm({ ...bookingForm, dateStr: e.target.value })}
+                      className="input" />
                   </div>
                 </div>
                 <div>
-                  <label className="label">Symptoms</label>
-                  <textarea value={bookingForm.symptoms} onChange={e => setBookingForm({ ...bookingForm, symptoms: e.target.value })} className="input h-20 resize-none" placeholder="Briefly describe your symptoms..." />
+                  <label className="label">Symptoms <span className="text-slate-300">(optional)</span></label>
+                  <textarea value={bookingForm.symptoms}
+                    onChange={e => setBookingForm({ ...bookingForm, symptoms: e.target.value })}
+                    className="input h-20 resize-none" placeholder="Briefly describe your symptoms..." />
                 </div>
-                <button type="submit" className="btn-primary">Book Appointment</button>
+                <button type="submit" disabled={booking} className="btn-primary disabled:opacity-50">
+                  {booking ? <><Loader2 size={14} className="animate-spin" /> Booking...</> : <>Book Appointment <ArrowRight size={13} /></>}
+                </button>
               </form>
             </div>
           )}
 
-          {/* History Tab */}
-          {activeTab === 'history' && (
-            <div className="card p-6">
-              <h3 className="section-title mb-5">Appointment History</h3>
-              {history.length === 0 ? (
-                <p className="text-sm text-slate-400 text-center py-8">No past appointments.</p>
+          {/* ── Doctors Availability Tab ── */}
+          {activeTab === 'doctors' && (
+            <div className="space-y-4 animate-fade-in">
+              <div className="card p-4 flex flex-wrap gap-3 items-end">
+                <div>
+                  <label className="label">Date</label>
+                  <input type="date" value={availDate} onChange={e => setAvailDate(e.target.value)} className="input w-auto" />
+                </div>
+                <div>
+                  <label className="label">Department</label>
+                  <select value={availDeptFilter} onChange={e => setAvailDeptFilter(e.target.value)} className="input w-auto">
+                    <option value="">All Departments</option>
+                    {departments.map(d => <option key={d._id} value={d._id}>{d.name}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {availLoading ? (
+                <div className="card p-12 flex items-center justify-center gap-2 text-slate-400">
+                  <Loader2 size={16} className="animate-spin" /> Loading...
+                </div>
+              ) : availDoctors.length === 0 ? (
+                <div className="card p-12 text-center">
+                  <Stethoscope size={28} className="text-slate-200 mx-auto mb-2" />
+                  <p className="text-sm text-slate-400">No doctors found</p>
+                </div>
               ) : (
                 <div className="space-y-3">
-                  {history.map(h => (
-                    <div key={h._id} className="border border-slate-100 rounded-xl p-4 hover:bg-slate-50 transition-all">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="font-semibold text-slate-800 text-sm">{h.doctor?.user?.name}</p>
-                          <p className="text-xs text-slate-400 mt-0.5">{h.department?.name} · {new Date(h.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                  {availDoctors.map(doc => (
+                    <div key={doc.doctorId} className="card p-5">
+                      <div className="flex items-start justify-between gap-4 flex-wrap">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 font-semibold text-sm shrink-0">
+                            {doc.name.charAt(0)}
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800">{doc.name}</p>
+                            <p className="text-xs text-slate-400">{doc.specialization} · {doc.department}</p>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-slate-500">#{h.tokenNumber}</span>
-                          <span className={`badge ${h.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' : h.status === 'Cancelled' ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-600'}`}>{h.status}</span>
-                        </div>
+                        <span className={`badge ${
+                          doc.isOnLeave        ? 'bg-red-50 text-red-600' :
+                          !doc.worksOnDate     ? 'bg-slate-100 text-slate-500' :
+                          doc.slotsLeft === 0  ? 'bg-amber-50 text-amber-700' :
+                                                 'bg-emerald-50 text-emerald-700'
+                        }`}>
+                          {doc.isOnLeave ? 'On Leave' : !doc.worksOnDate ? 'Not Working' : doc.slotsLeft === 0 ? 'Fully Booked' : 'Available'}
+                        </span>
                       </div>
-                      {h.diagnosis && (
-                        <div className="mt-3 bg-blue-50 border border-blue-100 rounded-lg p-3">
-                          <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-1">Doctor's Notes</p>
-                          <p className="text-xs text-blue-800">{h.diagnosis}</p>
+
+                      <div className="grid grid-cols-3 gap-3 mt-4">
+                        {[
+                          { label: 'Slots Left', value: doc.worksOnDate && !doc.isOnLeave ? doc.slotsLeft : '—', color: doc.slotsLeft === 0 ? 'text-red-500' : doc.slotsLeft <= 5 ? 'text-amber-600' : 'text-emerald-600' },
+                          { label: 'Avg. Time',  value: `${doc.avgConsultationTimeMinutes}m`,                    color: 'text-slate-700' },
+                          { label: 'Session',    value: doc.slotPreference,                                      color: 'text-slate-700' },
+                        ].map(s => (
+                          <div key={s.label} className="bg-slate-50 rounded-xl p-3 border border-slate-100 text-center">
+                            <p className="text-[10px] text-slate-400 font-medium mb-1">{s.label}</p>
+                            <p className={`text-sm font-semibold ${s.color}`}>{s.value}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="mt-3 flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex gap-1">
+                          {DAY_NAMES.map((d, i) => (
+                            <span key={i} className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                              doc.workingDays.includes(i) ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-300'
+                            }`}>{d}</span>
+                          ))}
                         </div>
-                      )}
+                        {doc.isAvailable && (
+                          <button onClick={() => { setBookingForm(prev => ({ ...prev, doctorId: doc.doctorId, dateStr: availDate })); setActiveTab('book'); }}
+                            className="btn-primary text-xs py-1.5">
+                            Book <ArrowRight size={11} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
             </div>
           )}
+
         </div>
 
         {/* Notifications sidebar */}
-        <div className="space-y-5">
-          <div className="card p-5">
-            <div className="flex items-center justify-between mb-4">
+        <div>
+          <div className="card">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
               <h3 className="section-title">Notifications</h3>
               {notifications.length > 0 && (
-                <span className="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{notifications.length}</span>
+                <span className="w-5 h-5 bg-slate-900 text-white text-[10px] font-semibold rounded-full flex items-center justify-center">
+                  {notifications.length}
+                </span>
               )}
             </div>
-            <div className="space-y-2.5 max-h-[500px] overflow-y-auto pr-1">
+            <div className="p-4 space-y-2 max-h-[480px] overflow-y-auto">
               {notifications.length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="text-3xl mb-2">🔔</div>
+                <div className="text-center py-10">
+                  <Bell size={24} className="text-slate-200 mx-auto mb-2" />
                   <p className="text-xs text-slate-400">No notifications yet</p>
                 </div>
               ) : notifications.map((n, idx) => (
-                <div key={idx} className="p-3 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100">
-                  <p className="text-xs font-bold text-slate-800">{n.title}</p>
+                <div key={idx} className="p-3 rounded-xl bg-slate-50 border border-slate-100 hover:bg-slate-100/60 transition-colors duration-100">
+                  <p className="text-xs font-medium text-slate-800">{n.title}</p>
                   <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{n.message}</p>
                   <p className="text-[10px] text-slate-400 mt-1.5">{new Date(n.createdAt).toLocaleTimeString()}</p>
                 </div>

@@ -50,8 +50,8 @@ function App() {
 
   if (loading) {
     return (
-      <div class="min-h-screen flex items-center justify-center bg-slate-50">
-        <div class="text-sm font-medium text-slate-500 tracking-wider">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-sm font-medium text-slate-500 tracking-wider">Loading...</div>
       </div>
     );
   }
@@ -59,9 +59,9 @@ function App() {
   return (
     <AuthContext.Provider value={loginContextValue}>
       <BrowserRouter>
-        <div class="min-h-screen flex flex-col bg-slate-50">
+        <div className="min-h-screen flex flex-col bg-slate-50">
           <Navbar />
-          <main class="flex-1 w-full max-w-7xl mx-auto p-4">
+          <main className="flex-1 w-full max-w-7xl mx-auto p-4">
             <Routes>
               <Route path="/login" element={!user ? <Login /> : <Navigate to={`/${user.role.toLowerCase()}-dashboard`} />} />
               <Route path="/register" element={!user ? <RegisterPatient /> : <Navigate to={`/${user.role.toLowerCase()}-dashboard`} />} />

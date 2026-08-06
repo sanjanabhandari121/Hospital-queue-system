@@ -1,26 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import api from '../utils/api';
 import { io } from 'socket.io-client';
+import {
+  CalendarDays, Settings, Users, CheckCircle2, Clock, SkipForward,
+  PhoneCall, Loader2, AlertTriangle, PauseCircle, PlayCircle,
+  CalendarOff, CalendarCheck, ChevronRight, Stethoscope
+} from 'lucide-react';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 const STATUS_STYLES = {
-  Scheduled: 'bg-blue-50 text-blue-700 border-blue-200',
-  Serving: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  Completed: 'bg-slate-50 text-slate-400 border-slate-200',
-  Skipped: 'bg-amber-50 text-amber-700 border-amber-200',
-  Cancelled: 'bg-red-50 text-red-600 border-red-200',
+  Scheduled: 'bg-blue-50 text-blue-700',
+  Serving:   'bg-emerald-50 text-emerald-700',
+  Completed: 'bg-slate-100 text-slate-400',
+  Skipped:   'bg-amber-50 text-amber-700',
+  Cancelled: 'bg-red-50 text-red-600',
 };
 
 function DoctorDashboard() {
-  const [profile, setProfile] = useState(null);
-  const [liveState, setLiveState] = useState(null);
-  const [dateStr, setDateStr] = useState(new Date().toISOString().split('T')[0]);
-  const [tab, setTab] = useState('queue');
-  const [weekAppts, setWeekAppts] = useState([]);
+  const [profile, setProfile]         = useState(null);
+  const [liveState, setLiveState]     = useState(null);
+  const [dateStr, setDateStr]         = useState(new Date().toISOString().split('T')[0]);
+  const [tab, setTab]                 = useState('queue');
+  const [weekAppts, setWeekAppts]     = useState([]);
   const [diagnosisMap, setDiagnosisMap] = useState({});
-  const [savingId, setSavingId] = useState(null);
-  const [availForm, setAvailForm] = useState({ workingDays: [], maxPatientsPerDay: 30, slotPreference: 'Full Day' });
+  const [savingId, setSavingId]       = useState(null);
+  const [availForm, setAvailForm]     = useState({ workingDays: [], maxPatientsPerDay: 30, slotPreference: 'Full Day' });
   const [availSaving, setAvailSaving] = useState(false);
 
   useEffect(() => { loadProfileAndQueue(); }, [dateStr]);
@@ -28,7 +33,7 @@ function DoctorDashboard() {
 
   useEffect(() => {
     if (!profile) return;
-    const socket = io('https://hospital-queue-system-gpgp.onrender.com');
+    const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000');
     socket.emit('joinDoctorRoom', profile._id);
     socket.on('queueUpdated', (s) => setLiveState(s));
     return () => socket.disconnect();
@@ -95,7 +100,9 @@ function DoctorDashboard() {
   const toggleWorkingDay = (day) => {
     setAvailForm(prev => ({
       ...prev,
-      workingDays: prev.workingDays.includes(day) ? prev.workingDays.filter(d => d !== day) : [...prev.workingDays, day].sort()
+      workingDays: prev.workingDays.includes(day)
+        ? prev.workingDays.filter(d => d !== day)
+        : [...prev.workingDays, day].sort()
     }));
   };
 
@@ -109,150 +116,167 @@ function DoctorDashboard() {
   if (!profile || !liveState) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="flex items-center gap-3 text-slate-400">
-          <span className="w-5 h-5 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin" />
-          Loading...
-        </div>
+        <Loader2 size={20} className="animate-spin text-slate-300" />
       </div>
     );
   }
 
   const tabs = [
-    { id: 'queue', label: "Today's Queue", icon: '🏥' },
-    { id: 'week', label: 'This Week', icon: '📅' },
-    { id: 'settings', label: 'Availability', icon: '⚙️' },
+    { id: 'queue',    label: "Today's Queue", icon: Users },
+    { id: 'week',     label: 'This Week',     icon: CalendarDays },
+    { id: 'settings', label: 'Availability',  icon: Settings },
   ];
 
   return (
-    <div className="max-w-7xl mx-auto space-y-5">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-600 rounded-2xl p-6 text-white shadow-lg shadow-emerald-200">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <p className="text-emerald-200 text-sm">Dr. {profile.user?.name}</p>
-            <h1 className="text-xl font-extrabold mt-0.5">{profile.department?.name} · {profile.hospital?.name}</h1>
-            <p className="text-emerald-200 text-xs mt-1">{profile.specialization}</p>
+    <div className="max-w-7xl mx-auto space-y-6 animate-fade-in">
+
+      {/* Page header */}
+      <div className="flex items-start justify-between flex-wrap gap-4 pt-2">
+        <div>
+          <p className="text-xs font-medium text-slate-400 mb-1">Doctor Dashboard</p>
+          <h1 className="page-title">Dr. {profile.user?.name}</h1>
+          <p className="text-xs text-slate-400 mt-1">{profile.specialization} · {profile.department?.name} · {profile.hospital?.name}</p>
+        </div>
+        <div className="flex gap-2">
+          <div className="flex items-center gap-2 bg-white border border-slate-100 rounded-xl px-3.5 py-2.5 shadow-sm">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 live-dot" />
+            <span className="text-sm font-semibold text-slate-800">{liveState.stats?.waiting || 0}</span>
+            <span className="text-xs text-slate-400">waiting</span>
           </div>
-          <div className="flex gap-3">
-            <div className="bg-white/20 rounded-xl px-4 py-2 text-center">
-              <p className="text-2xl font-extrabold">{liveState.stats?.waiting || 0}</p>
-              <p className="text-emerald-200 text-[10px] font-medium uppercase">Waiting</p>
-            </div>
-            <div className="bg-white/20 rounded-xl px-4 py-2 text-center">
-              <p className="text-2xl font-extrabold">{liveState.stats?.served || 0}</p>
-              <p className="text-emerald-200 text-[10px] font-medium uppercase">Done</p>
-            </div>
+          <div className="flex items-center gap-2 bg-white border border-slate-100 rounded-xl px-3.5 py-2.5 shadow-sm">
+            <CheckCircle2 size={13} className="text-slate-400" />
+            <span className="text-sm font-semibold text-slate-800">{liveState.stats?.served || 0}</span>
+            <span className="text-xs text-slate-400">done</span>
           </div>
         </div>
       </div>
 
       {/* Status banners */}
       {profile.isOnLeave && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm font-semibold text-red-700 flex items-center gap-2">
-          🚫 You are on leave. Today's appointments have been cancelled and patients notified.
+        <div className="flex items-center gap-2.5 bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-sm font-medium text-red-700 animate-fade-in">
+          <CalendarOff size={15} />
+          You are on leave. Today's appointments have been cancelled and patients notified.
         </div>
       )}
       {profile.queuePaused && !profile.isOnLeave && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm font-semibold text-amber-700 flex items-center gap-2">
-          ⏸ Queue is paused. Patients are being asked to wait.
+        <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-sm font-medium text-amber-700 animate-fade-in">
+          <PauseCircle size={15} />
+          Queue is paused. Patients are being asked to wait.
         </div>
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-white rounded-2xl p-1.5 border border-slate-100 shadow-sm">
+      <div className="tab-bar w-fit">
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            className={`flex-1 flex items-center justify-center gap-2 text-xs font-semibold py-2.5 rounded-xl transition-all ${tab === t.id ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
-            <span>{t.icon}</span> {t.label}
+            className={tab === t.id ? 'tab-item-active' : 'tab-item'}>
+            <t.icon size={13} />
+            {t.label}
           </button>
         ))}
       </div>
 
-      {/* Queue Tab */}
+      {/* ── Queue Tab ── */}
       {tab === 'queue' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          <div className="lg:col-span-2 space-y-5">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 animate-fade-in">
+          <div className="lg:col-span-2 space-y-4">
+
             {/* Date picker */}
-            <div className="card p-4 flex items-center justify-between">
-              <p className="text-sm font-semibold text-slate-700">Viewing queue for:</p>
+            <div className="card p-4 flex items-center justify-between gap-4">
+              <p className="text-sm font-medium text-slate-700">Queue for</p>
               <input type="date" value={dateStr} onChange={e => setDateStr(e.target.value)} className="input w-auto" />
             </div>
 
             {/* Now Serving */}
-            <div className={`card overflow-hidden`}>
-              <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-4">
-                <p className="text-emerald-100 text-xs font-bold uppercase tracking-wider">🟢 Now Serving</p>
+            <div className="card overflow-hidden">
+              <div className="px-5 py-3 border-b border-slate-100 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 live-dot" />
+                <span className="text-xs font-medium text-slate-500">Now Serving</span>
               </div>
               <div className="p-6 text-center">
                 {liveState.currentPatient ? (
                   <>
-                    <p className="text-5xl font-extrabold text-slate-800">#{liveState.currentPatient.tokenNumber}</p>
-                    <p className="text-lg font-semibold text-slate-600 mt-2">{liveState.currentPatient.name}</p>
+                    <div className="w-16 h-16 rounded-2xl bg-slate-900 flex items-center justify-center mx-auto mb-3">
+                      <span className="text-white text-2xl font-semibold">#{liveState.currentPatient.tokenNumber}</span>
+                    </div>
+                    <p className="text-lg font-semibold text-slate-800">{liveState.currentPatient.name}</p>
                     {liveState.currentPatient.isEmergency && (
-                      <span className="inline-block mt-2 bg-red-100 text-red-700 text-xs font-bold px-3 py-1 rounded-full">🚨 Emergency</span>
+                      <span className="inline-flex items-center gap-1 mt-2 bg-red-50 text-red-600 text-xs font-medium px-2.5 py-1 rounded-lg border border-red-100">
+                        <AlertTriangle size={11} /> Emergency
+                      </span>
                     )}
                     {liveState.currentPatient.symptoms && (
-                      <p className="text-xs text-slate-400 mt-2 italic">"{liveState.currentPatient.symptoms}"</p>
+                      <p className="text-xs text-slate-400 mt-2 italic max-w-xs mx-auto">"{liveState.currentPatient.symptoms}"</p>
                     )}
-                    <button onClick={() => executeAction('COMPLETE', liveState.currentPatient.appointmentId)}
-                      className="mt-5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-sm px-8 py-3 rounded-xl hover:from-emerald-700 hover:to-teal-700 transition-all shadow-md shadow-emerald-200 active:scale-95">
-                      ✓ Done — Call Next
+                    <button
+                      onClick={() => executeAction('COMPLETE', liveState.currentPatient.appointmentId)}
+                      className="btn-primary mt-5 mx-auto"
+                    >
+                      <CheckCircle2 size={14} /> Mark done & call next
                     </button>
                   </>
                 ) : (
-                  <div className="py-4">
-                    <div className="text-4xl mb-3">👨‍⚕️</div>
-                    <p className="text-slate-400 text-sm">No one is being seen right now.</p>
-                    <p className="text-slate-300 text-xs mt-1">Press <strong>Call In</strong> on a patient below to start.</p>
+                  <div className="py-6">
+                    <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-3">
+                      <Stethoscope size={20} className="text-slate-300" />
+                    </div>
+                    <p className="text-sm text-slate-400">No patient being seen right now</p>
+                    <p className="text-xs text-slate-300 mt-1">Press "Call in" on a patient below to start</p>
                   </div>
                 )}
               </div>
             </div>
 
             {/* Waiting list */}
-            <div className="card p-5">
-              <div className="flex items-center justify-between mb-4">
+            <div className="card">
+              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
                 <h3 className="section-title">Waiting Queue</h3>
-                <span className="badge bg-blue-100 text-blue-700">{liveState.stats?.waiting || 0} waiting</span>
+                <span className="badge bg-slate-100 text-slate-600">{liveState.stats?.waiting || 0} waiting</span>
               </div>
-              {liveState.waitingList.length === 0 ? (
-                <div className="text-center py-10">
-                  <div className="text-4xl mb-3">✅</div>
-                  <p className="text-slate-400 text-sm">Queue is empty</p>
-                </div>
-              ) : (
-                <div className="space-y-2.5">
-                  {liveState.waitingList.map((item, index) => (
-                    <div key={item.appointmentId}
-                      className={`flex items-center justify-between p-4 rounded-xl border transition-all ${item.isEmergency ? 'border-red-200 bg-red-50' : index === 0 ? 'border-blue-200 bg-blue-50' : 'border-slate-100 bg-white hover:bg-slate-50'}`}>
-                      <div className="flex items-center gap-4">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-extrabold text-sm ${item.isEmergency ? 'bg-red-500 text-white' : index === 0 ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
-                          {item.tokenNumber}
+              <div className="p-4">
+                {liveState.waitingList.length === 0 ? (
+                  <div className="text-center py-10">
+                    <CheckCircle2 size={28} className="text-slate-200 mx-auto mb-2" />
+                    <p className="text-sm text-slate-400">Queue is empty</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {liveState.waitingList.map((item, index) => (
+                      <div key={item.appointmentId}
+                        className={`flex items-center justify-between p-3.5 rounded-xl border transition-all duration-150
+                          ${item.isEmergency ? 'border-red-200 bg-red-50/50' : index === 0 ? 'border-blue-200 bg-blue-50/40' : 'border-slate-100 bg-white hover:bg-slate-50'}`}>
+                        <div className="flex items-center gap-3">
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-semibold text-sm shrink-0
+                            ${item.isEmergency ? 'bg-red-500 text-white' : index === 0 ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                            {item.tokenNumber}
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-slate-800">{item.name}</p>
+                            <p className="text-xs text-slate-400">
+                              {item.isEmergency
+                                ? <span className="text-red-500 font-medium">Emergency</span>
+                                : `~${item.estimatedWaitMinutes} min wait`}
+                              {item.status === 'Skipped' && <span className="ml-2 text-amber-600 font-medium">· Skipped</span>}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-semibold text-slate-800 text-sm">{item.name}</p>
-                          <p className="text-xs text-slate-400">
-                            {item.isEmergency ? '🚨 Emergency' : `~${item.estimatedWaitMinutes} min wait`}
-                            {item.status === 'Skipped' && <span className="ml-2 text-amber-600 font-bold">· Skipped</span>}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => executeAction('CALL_NEXT', item.appointmentId)}
-                          className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs font-bold px-4 py-2 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm">
-                          Call In
-                        </button>
-                        {item.status !== 'Skipped' && (
-                          <button onClick={() => executeAction('SKIP', item.appointmentId)}
-                            className="bg-white border border-slate-200 text-slate-500 text-xs font-medium px-3 py-2 rounded-lg hover:bg-slate-50 transition-all">
-                            Skip
+                        <div className="flex gap-2">
+                          <button onClick={() => executeAction('CALL_NEXT', item.appointmentId)}
+                            className="btn-primary text-xs py-1.5 px-3">
+                            <PhoneCall size={12} /> Call in
                           </button>
-                        )}
+                          {item.status !== 'Skipped' && (
+                            <button onClick={() => executeAction('SKIP', item.appointmentId)}
+                              className="btn-secondary text-xs py-1.5 px-3">
+                              <SkipForward size={12} />
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -260,14 +284,20 @@ function DoctorDashboard() {
           <div className="space-y-4">
             <div className="card p-5">
               <h3 className="section-title mb-4">Quick Controls</h3>
-              <div className="space-y-2.5">
+              <div className="space-y-2">
                 <button onClick={handleTogglePause}
-                  className={`w-full text-sm font-semibold py-3 rounded-xl border transition-all ${profile.queuePaused ? 'bg-amber-500 text-white border-amber-500 hover:bg-amber-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}>
-                  {profile.queuePaused ? '▶ Resume Queue' : '⏸ Pause Queue'}
+                  className={`w-full flex items-center justify-center gap-2 text-sm font-medium py-2.5 rounded-xl border transition-all duration-150
+                    ${profile.queuePaused
+                      ? 'bg-amber-500 text-white border-amber-500 hover:bg-amber-600'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}>
+                  {profile.queuePaused ? <><PlayCircle size={15} /> Resume Queue</> : <><PauseCircle size={15} /> Pause Queue</>}
                 </button>
                 <button onClick={handleToggleLeave}
-                  className={`w-full text-sm font-semibold py-3 rounded-xl border transition-all ${profile.isOnLeave ? 'bg-red-600 text-white border-red-600 hover:bg-red-700' : 'bg-white text-red-600 border-red-200 hover:bg-red-50'}`}>
-                  {profile.isOnLeave ? '✓ Back from Leave' : '🚫 Mark as On Leave'}
+                  className={`w-full flex items-center justify-center gap-2 text-sm font-medium py-2.5 rounded-xl border transition-all duration-150
+                    ${profile.isOnLeave
+                      ? 'bg-slate-900 text-white border-slate-900 hover:bg-slate-700'
+                      : 'bg-white text-red-600 border-red-200 hover:bg-red-50'}`}>
+                  {profile.isOnLeave ? <><CalendarCheck size={15} /> Back from Leave</> : <><CalendarOff size={15} /> Mark as On Leave</>}
                 </button>
               </div>
             </div>
@@ -276,14 +306,14 @@ function DoctorDashboard() {
               <h3 className="section-title mb-4">Today's Stats</h3>
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  { label: 'Total', value: liveState.stats?.total || 0, color: 'text-slate-800' },
-                  { label: 'Completed', value: liveState.stats?.served || 0, color: 'text-emerald-600' },
-                  { label: 'Waiting', value: liveState.stats?.waiting || 0, color: 'text-blue-600' },
-                  { label: 'Avg Time', value: `${liveState.stats?.avgTime || 15}m`, color: 'text-indigo-600' },
+                  { label: 'Total',     value: liveState.stats?.total || 0,   color: 'text-slate-900' },
+                  { label: 'Completed', value: liveState.stats?.served || 0,  color: 'text-emerald-600' },
+                  { label: 'Waiting',   value: liveState.stats?.waiting || 0, color: 'text-blue-600' },
+                  { label: 'Avg Time',  value: `${liveState.stats?.avgTime || 15}m`, color: 'text-slate-700' },
                 ].map(s => (
                   <div key={s.label} className="bg-slate-50 rounded-xl p-3 border border-slate-100">
-                    <p className="text-[10px] uppercase text-slate-400 font-bold">{s.label}</p>
-                    <p className={`text-xl font-extrabold mt-1 ${s.color}`}>{s.value}</p>
+                    <p className="text-[10px] text-slate-400 font-medium mb-1">{s.label}</p>
+                    <p className={`text-xl font-semibold ${s.color}`}>{s.value}</p>
                   </div>
                 ))}
               </div>
@@ -292,39 +322,43 @@ function DoctorDashboard() {
         </div>
       )}
 
-      {/* Week Tab */}
+      {/* ── Week Tab ── */}
       {tab === 'week' && (
-        <div className="space-y-4">
+        <div className="space-y-4 animate-fade-in">
           {Object.keys(groupedByDay).length === 0 ? (
-            <div className="card p-12 text-center">
-              <div className="text-4xl mb-3">📅</div>
-              <p className="text-slate-400">No appointments this week.</p>
+            <div className="card p-16 text-center">
+              <CalendarDays size={32} className="text-slate-200 mx-auto mb-3" />
+              <p className="text-sm text-slate-400">No appointments this week</p>
             </div>
           ) : Object.keys(groupedByDay).sort().map(dayKey => {
             const d = new Date(dayKey);
             const isToday = dayKey === new Date().toISOString().split('T')[0];
             return (
               <div key={dayKey} className="card overflow-hidden">
-                <div className={`px-6 py-3 flex items-center gap-3 ${isToday ? 'bg-gradient-to-r from-emerald-600 to-teal-600' : 'bg-slate-50 border-b border-slate-100'}`}>
-                  <span className={`text-sm font-bold ${isToday ? 'text-white' : 'text-slate-700'}`}>
+                <div className={`px-5 py-3 border-b border-slate-100 flex items-center gap-3 ${isToday ? 'bg-slate-900' : 'bg-slate-50'}`}>
+                  <span className={`text-sm font-medium ${isToday ? 'text-white' : 'text-slate-700'}`}>
                     {DAY_LABELS[d.getDay()]}, {d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                   </span>
-                  {isToday && <span className="text-[10px] bg-white text-emerald-700 font-bold px-2 py-0.5 rounded-full">TODAY</span>}
-                  <span className={`ml-auto text-xs font-medium ${isToday ? 'text-emerald-100' : 'text-slate-400'}`}>{groupedByDay[dayKey].length} appointment(s)</span>
+                  {isToday && <span className="text-[10px] bg-white/20 text-white font-semibold px-2 py-0.5 rounded-md">Today</span>}
+                  <span className={`ml-auto text-xs ${isToday ? 'text-slate-400' : 'text-slate-400'}`}>
+                    {groupedByDay[dayKey].length} appointment{groupedByDay[dayKey].length !== 1 ? 's' : ''}
+                  </span>
                 </div>
-                <div className="divide-y divide-slate-50">
-                  {groupedByDay[dayKey].map(apt => (
-                    <div key={apt._id} className="p-4 flex flex-col md:flex-row md:items-center gap-4 hover:bg-slate-50 transition-all">
-                      <div className="flex items-center gap-4 flex-1">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center font-extrabold text-slate-700 text-sm shrink-0">
+                <div>
+                  {groupedByDay[dayKey].map((apt, i) => (
+                    <div key={apt._id}
+                      className={`p-4 flex flex-col md:flex-row md:items-center gap-4 hover:bg-slate-50/60 transition-colors duration-100
+                        ${i < groupedByDay[dayKey].length - 1 ? 'border-b border-slate-50' : ''}`}>
+                      <div className="flex items-center gap-3 flex-1">
+                        <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center font-semibold text-slate-700 text-sm shrink-0">
                           #{apt.tokenNumber}
                         </div>
-                        <div className="flex-1">
-                          <p className="font-semibold text-slate-800 text-sm">{apt.patient?.user?.name}</p>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-800">{apt.patient?.user?.name}</p>
                           <p className="text-xs text-slate-400">{apt.patient?.user?.phone}</p>
-                          {apt.symptoms && <p className="text-xs text-slate-500 mt-1 italic">"{apt.symptoms}"</p>}
+                          {apt.symptoms && <p className="text-xs text-slate-400 mt-0.5 italic truncate">"{apt.symptoms}"</p>}
                         </div>
-                        <span className={`badge border ${STATUS_STYLES[apt.status] || ''}`}>{apt.status}</span>
+                        <span className={`badge ${STATUS_STYLES[apt.status] || 'bg-slate-100 text-slate-500'} shrink-0`}>{apt.status}</span>
                       </div>
                       <div className="flex gap-2 items-start md:w-72 shrink-0">
                         <textarea rows={2} placeholder="Diagnosis notes..."
@@ -332,8 +366,8 @@ function DoctorDashboard() {
                           onChange={e => setDiagnosisMap(prev => ({ ...prev, [apt._id]: e.target.value }))}
                           className="input flex-1 resize-none text-xs" />
                         <button onClick={() => handleSaveDiagnosis(apt._id)} disabled={savingId === apt._id}
-                          className="btn-primary text-xs px-3 py-2 disabled:opacity-50 shrink-0">
-                          {savingId === apt._id ? '...' : 'Save'}
+                          className="btn-secondary text-xs px-3 py-2 disabled:opacity-50 shrink-0">
+                          {savingId === apt._id ? <Loader2 size={12} className="animate-spin" /> : 'Save'}
                         </button>
                       </div>
                     </div>
@@ -345,38 +379,42 @@ function DoctorDashboard() {
         </div>
       )}
 
-      {/* Settings Tab */}
+      {/* ── Settings Tab ── */}
       {tab === 'settings' && (
-        <div className="max-w-xl">
+        <div className="max-w-lg animate-fade-in">
           <div className="card p-6">
             <h3 className="section-title mb-6">Availability Settings</h3>
             <form onSubmit={handleSaveAvailability} className="space-y-6">
               <div>
-                <label className="label mb-3">Working Days</label>
+                <label className="label mb-3">Working days</label>
                 <div className="flex gap-2 flex-wrap">
                   {DAY_LABELS.map((label, val) => (
                     <button key={val} type="button" onClick={() => toggleWorkingDay(val)}
-                      className={`text-xs font-bold px-4 py-2 rounded-xl border transition-all ${availForm.workingDays.includes(val) ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-transparent shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}>
+                      className={`text-xs font-medium px-3.5 py-2 rounded-xl border transition-all duration-150
+                        ${availForm.workingDays.includes(val)
+                          ? 'bg-slate-900 text-white border-slate-900'
+                          : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}>
                       {label}
                     </button>
                   ))}
                 </div>
               </div>
               <div>
-                <label className="label">Max Patients Per Day</label>
+                <label className="label">Max patients per day</label>
                 <input type="number" min="1" max="200" value={availForm.maxPatientsPerDay}
                   onChange={e => setAvailForm(prev => ({ ...prev, maxPatientsPerDay: e.target.value }))}
                   className="input" />
               </div>
               <div>
-                <label className="label">Slot Preference</label>
-                <select value={availForm.slotPreference} onChange={e => setAvailForm(prev => ({ ...prev, slotPreference: e.target.value }))} className="input">
+                <label className="label">Slot preference</label>
+                <select value={availForm.slotPreference}
+                  onChange={e => setAvailForm(prev => ({ ...prev, slotPreference: e.target.value }))}
+                  className="input">
                   {['Morning', 'Afternoon', 'Evening', 'Full Day'].map(s => <option key={s}>{s}</option>)}
                 </select>
               </div>
-              <button type="submit" disabled={availSaving} className="btn-primary disabled:opacity-60 flex items-center gap-2">
-                {availSaving ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : null}
-                {availSaving ? 'Saving...' : 'Save Settings'}
+              <button type="submit" disabled={availSaving} className="btn-primary disabled:opacity-50">
+                {availSaving ? <><Loader2 size={14} className="animate-spin" /> Saving...</> : 'Save settings'}
               </button>
             </form>
           </div>

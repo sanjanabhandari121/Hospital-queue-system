@@ -16,24 +16,29 @@ const queueService=require('./services/queueService');
 const app=express();
 const server=http.createServer(app);
 
+const ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://192.168.1.8:5173",
+    "https://hospital-queue-system-one.vercel.app"
+];
+
 app.use(cors({
-    origin:[
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "https://hospital-queue-system-one.vercel.app"
-    ],
-    credentials:true
+    origin: (origin, callback) => {
+        if (!origin || ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+        callback(new Error('CORS not allowed'));
+    },
+    credentials: true
 }));
 
 app.use(express.json());
 
 const io=new Server(server,{
     cors:{
-        origin:[
-            "http://localhost:3000",
-            "http://localhost:5173",
-            "https://hospital-queue-system-one.vercel.app"
-        ],
+        origin: (origin, callback) => {
+            if (!origin || ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+            callback(new Error('CORS not allowed'));
+        },
         methods:["GET","POST","PUT","DELETE"],
         credentials:true
     }

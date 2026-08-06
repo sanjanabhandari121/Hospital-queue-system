@@ -1,23 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import api from '../utils/api';
+import {
+  UserPlus, Users, Search, AlertCircle, CheckCircle2,
+  X, AlertTriangle, Loader2, ArrowRight, Eye, Trash2
+} from 'lucide-react';
 
 function ReceptionistDashboard() {
-  const [hospitals, setHospitals] = useState([]);
-  const [departments, setDepartments] = useState([]);
-  const [doctors, setDoctors] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [allPatients, setAllPatients] = useState([]);
-  const [walkInForm, setWalkInForm] = useState({
+  const [hospitals, setHospitals]               = useState([]);
+  const [departments, setDepartments]           = useState([]);
+  const [doctors, setDoctors]                   = useState([]);
+  const [searchQuery, setSearchQuery]           = useState('');
+  const [searchResults, setSearchResults]       = useState([]);
+  const [allPatients, setAllPatients]           = useState([]);
+  const [walkInForm, setWalkInForm]             = useState({
     name: '', email: '', phone: '', gender: 'Male', age: '', bloodGroup: 'O+',
-    hospitalId: '', departmentId: '', doctorId: '', dateStr: new Date().toISOString().split('T')[0],
+    hospitalId: '', departmentId: '', doctorId: '',
+    dateStr: new Date().toISOString().split('T')[0],
     symptoms: '', isEmergency: false
   });
-  const [uiError, setUiError] = useState('');
-  const [uiSuccess, setUiSuccess] = useState('');
+  const [uiError, setUiError]                   = useState('');
+  const [uiSuccess, setUiSuccess]               = useState('');
   const [patientAppointments, setPatientAppointments] = useState([]);
-  const [selectedPatient, setSelectedPatient] = useState(null);
-  const [activeTab, setActiveTab] = useState('register');
+  const [selectedPatient, setSelectedPatient]   = useState(null);
+  const [activeTab, setActiveTab]               = useState('register');
+  const [submitting, setSubmitting]             = useState(false);
 
   useEffect(() => { loadData(); }, []);
 
@@ -88,6 +94,7 @@ function ReceptionistDashboard() {
   const handleWalkInSubmit = async (e) => {
     e.preventDefault();
     setUiError(''); setUiSuccess('');
+    setSubmitting(true);
     try {
       const res = await api.post('/receptionist/walk-in-booking', walkInForm);
       if (res.data.success) {
@@ -98,46 +105,72 @@ function ReceptionistDashboard() {
         loadData();
       }
     } catch (err) { setUiError(err.response?.data?.error || 'Failed to book.'); }
+    setSubmitting(false);
   };
 
-  const filteredDoctors = doctors.filter(d => d.hospital?._id === walkInForm.hospitalId && d.department?._id === walkInForm.departmentId);
+  const filteredDoctors = doctors.filter(d =>
+    d.hospital?._id === walkInForm.hospitalId && d.department?._id === walkInForm.departmentId
+  );
 
   const tabs = [
-    { id: 'register', label: 'Register Walk-in', icon: '➕' },
-    { id: 'patients', label: `All Patients (${allPatients.length})`, icon: '👥' },
+    { id: 'register', label: 'Register Walk-in',                    icon: UserPlus },
+    { id: 'patients', label: `All Patients (${allPatients.length})`, icon: Users },
   ];
 
+  const STATUS_BADGE = {
+    Cancelled: 'bg-red-50 text-red-600',
+    Completed: 'bg-emerald-50 text-emerald-700',
+    Serving:   'bg-blue-50 text-blue-700',
+    Scheduled: 'bg-slate-100 text-slate-600',
+  };
+
   return (
-    <div className="max-w-7xl mx-auto space-y-5">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-6 text-white shadow-lg shadow-amber-200">
-        <h1 className="text-xl font-extrabold">Receptionist Dashboard</h1>
-        <p className="text-amber-100 text-sm mt-1">Register walk-in patients and manage appointments</p>
+    <div className="max-w-7xl mx-auto space-y-6 animate-fade-in">
+
+      {/* Page header */}
+      <div className="pt-2">
+        <p className="text-xs font-medium text-slate-400 mb-1">Receptionist Dashboard</p>
+        <h1 className="page-title">Patient Registration</h1>
+        <p className="text-xs text-slate-400 mt-1">Register walk-in patients and manage appointments</p>
       </div>
 
-      {uiError && <div className="bg-red-50 text-red-600 border border-red-200 p-3 rounded-xl text-sm font-medium flex gap-2"><span>⚠️</span>{uiError}</div>}
-      {uiSuccess && <div className="bg-emerald-50 text-emerald-700 border border-emerald-200 p-3 rounded-xl text-sm font-medium flex gap-2"><span>✅</span>{uiSuccess}</div>}
+      {/* Alerts */}
+      {uiError && (
+        <div className="flex items-start gap-2.5 bg-red-50 border border-red-100 text-red-700 p-3 rounded-xl text-xs font-medium animate-fade-in">
+          <AlertCircle size={13} className="shrink-0 mt-px" /> {uiError}
+        </div>
+      )}
+      {uiSuccess && (
+        <div className="flex items-start gap-2.5 bg-emerald-50 border border-emerald-100 text-emerald-700 p-3 rounded-xl text-xs font-medium animate-fade-in">
+          <CheckCircle2 size={13} className="shrink-0 mt-px" /> {uiSuccess}
+        </div>
+      )}
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-white rounded-2xl p-1.5 border border-slate-100 shadow-sm">
+      <div className="tab-bar w-fit">
         {tabs.map(t => (
           <button key={t.id} onClick={() => setActiveTab(t.id)}
-            className={`flex-1 flex items-center justify-center gap-2 text-xs font-semibold py-2.5 rounded-xl transition-all ${activeTab === t.id ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
-            <span>{t.icon}</span> {t.label}
+            className={activeTab === t.id ? 'tab-item-active' : 'tab-item'}>
+            <t.icon size={13} />
+            {t.label}
           </button>
         ))}
       </div>
 
+      {/* ── Register Tab ── */}
       {activeTab === 'register' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 animate-fade-in">
+
           {/* Walk-in form */}
           <div className="lg:col-span-2 card p-6">
-            <h3 className="section-title mb-5">Register Walk-in Patient</h3>
-            <form onSubmit={handleWalkInSubmit} className="space-y-5">
+            <h3 className="section-title mb-5">Walk-in Patient Details</h3>
+            <form onSubmit={handleWalkInSubmit} className="space-y-6">
+
+              {/* Patient info */}
               <div>
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3">Patient Details</p>
+                <p className="text-xs font-medium text-slate-400 mb-3">Personal information</p>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div><label className="label">Name</label><input type="text" required value={walkInForm.name} onChange={e => setWalkInForm({...walkInForm, name: e.target.value})} className="input" /></div>
+                  <div><label className="label">Full name</label><input type="text" required value={walkInForm.name} onChange={e => setWalkInForm({...walkInForm, name: e.target.value})} className="input" /></div>
                   <div><label className="label">Email</label><input type="email" required value={walkInForm.email} onChange={e => setWalkInForm({...walkInForm, email: e.target.value})} className="input" /></div>
                   <div><label className="label">Phone</label><input type="text" required value={walkInForm.phone} onChange={e => setWalkInForm({...walkInForm, phone: e.target.value})} className="input" /></div>
                 </div>
@@ -150,7 +183,7 @@ function ReceptionistDashboard() {
                     </select>
                   </div>
                   <div>
-                    <label className="label">Blood Type</label>
+                    <label className="label">Blood type</label>
                     <select value={walkInForm.bloodGroup} onChange={e => setWalkInForm({...walkInForm, bloodGroup: e.target.value})} className="input">
                       {['A+','A-','B+','B-','O+','O-','AB+','AB-'].map(b => <option key={b}>{b}</option>)}
                     </select>
@@ -158,82 +191,110 @@ function ReceptionistDashboard() {
                 </div>
               </div>
 
+              {/* Appointment info */}
               <div className="border-t border-slate-100 pt-5">
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3">Appointment Details</p>
+                <p className="text-xs font-medium text-slate-400 mb-3">Appointment details</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="label">Hospital</label>
                     <select required value={walkInForm.hospitalId} onChange={handleHospitalChange} className="input">
-                      <option value="">Select Hospital</option>
+                      <option value="">Select hospital</option>
                       {hospitals.map(h => <option key={h._id} value={h._id}>{h.name}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="label">Department</label>
-                    <select required value={walkInForm.departmentId} onChange={e => setWalkInForm({...walkInForm, departmentId: e.target.value, doctorId: ''})} disabled={!walkInForm.hospitalId} className="input disabled:bg-slate-50">
-                      <option value="">Select Department</option>
+                    <select required value={walkInForm.departmentId}
+                      onChange={e => setWalkInForm({...walkInForm, departmentId: e.target.value, doctorId: ''})}
+                      disabled={!walkInForm.hospitalId} className="input disabled:opacity-50">
+                      <option value="">Select department</option>
                       {departments.map(d => <option key={d._id} value={d._id}>{d.name}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="label">Doctor</label>
-                    <select required value={walkInForm.doctorId} onChange={e => setWalkInForm({...walkInForm, doctorId: e.target.value})} disabled={!walkInForm.departmentId} className="input disabled:bg-slate-50">
-                      <option value="">Select Doctor</option>
+                    <select required value={walkInForm.doctorId}
+                      onChange={e => setWalkInForm({...walkInForm, doctorId: e.target.value})}
+                      disabled={!walkInForm.departmentId} className="input disabled:opacity-50">
+                      <option value="">Select doctor</option>
                       {filteredDoctors.map(doc => <option key={doc._id} value={doc._id}>{doc.user?.name}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="label">Date</label>
-                    <input type="date" required value={walkInForm.dateStr} onChange={e => setWalkInForm({...walkInForm, dateStr: e.target.value})} className="input" />
+                    <input type="date" required value={walkInForm.dateStr}
+                      onChange={e => setWalkInForm({...walkInForm, dateStr: e.target.value})} className="input" />
                   </div>
                 </div>
                 <div className="mt-4">
-                  <label className="label">Symptoms</label>
-                  <textarea value={walkInForm.symptoms} onChange={e => setWalkInForm({...walkInForm, symptoms: e.target.value})} className="input h-16 resize-none" placeholder="Describe symptoms..." />
+                  <label className="label">Symptoms <span className="text-slate-300">(optional)</span></label>
+                  <textarea value={walkInForm.symptoms}
+                    onChange={e => setWalkInForm({...walkInForm, symptoms: e.target.value})}
+                    className="input h-16 resize-none" placeholder="Describe symptoms..." />
                 </div>
-                <label className={`mt-4 flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${walkInForm.isEmergency ? 'border-red-400 bg-red-50' : 'border-slate-200 hover:border-red-200'}`}>
-                  <input type="checkbox" checked={walkInForm.isEmergency} onChange={e => setWalkInForm({...walkInForm, isEmergency: e.target.checked})} className="w-4 h-4 accent-red-600" />
+
+                {/* Emergency toggle */}
+                <label className={`mt-4 flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all duration-150
+                  ${walkInForm.isEmergency ? 'border-red-300 bg-red-50/60' : 'border-slate-200 hover:border-red-200'}`}>
+                  <input type="checkbox" checked={walkInForm.isEmergency}
+                    onChange={e => setWalkInForm({...walkInForm, isEmergency: e.target.checked})}
+                    className="w-4 h-4 accent-red-600" />
                   <div>
-                    <p className="text-sm font-bold text-red-700">🚨 Mark as Emergency</p>
-                    <p className="text-xs text-red-400">Moves patient to front of queue</p>
+                    <p className="text-sm font-medium text-red-700 flex items-center gap-1.5">
+                      <AlertTriangle size={13} /> Mark as Emergency
+                    </p>
+                    <p className="text-xs text-red-400 mt-0.5">Moves patient to front of queue immediately</p>
                   </div>
                 </label>
               </div>
 
-              <button type="submit" className="btn-primary">Book Appointment</button>
+              <button type="submit" disabled={submitting} className="btn-primary disabled:opacity-50">
+                {submitting
+                  ? <><Loader2 size={14} className="animate-spin" /> Registering...</>
+                  : <><UserPlus size={14} /> Register & Book</>
+                }
+              </button>
             </form>
           </div>
 
           {/* Search panel */}
           <div className="card p-5 h-fit">
-            <h3 className="section-title mb-4">Search Existing Patient</h3>
+            <h3 className="section-title mb-4">Find Existing Patient</h3>
             <form onSubmit={handleSearch} className="flex gap-2 mb-4">
-              <input type="text" placeholder="Name, phone or email..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="input flex-1" />
-              <button type="submit" className="btn-primary px-4 text-xs">Find</button>
+              <input type="text" placeholder="Name, phone or email..."
+                value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                className="input flex-1" />
+              <button type="submit" className="btn-secondary px-3">
+                <Search size={14} />
+              </button>
             </form>
-            <div className="space-y-2 max-h-80 overflow-y-auto">
+            <div className="space-y-1.5 max-h-80 overflow-y-auto">
               {searchResults.map(p => (
                 <div key={p._id} onClick={() => selectExistingPatient(p)}
-                  className="p-3 border border-slate-100 rounded-xl hover:bg-blue-50 hover:border-blue-200 cursor-pointer transition-all">
-                  <p className="font-semibold text-slate-800 text-sm">{p.user?.name}</p>
+                  className="p-3 border border-slate-100 rounded-xl hover:bg-blue-50/60 hover:border-blue-200 cursor-pointer transition-all duration-150">
+                  <p className="text-sm font-medium text-slate-800">{p.user?.name}</p>
                   <p className="text-xs text-slate-400 mt-0.5">{p.user?.phone} · {p.user?.email}</p>
                 </div>
               ))}
               {searchQuery && searchResults.length === 0 && (
-                <p className="text-xs text-slate-400 italic text-center py-4">No patients found.</p>
+                <p className="text-xs text-slate-400 text-center py-6">No patients found</p>
               )}
             </div>
           </div>
         </div>
       )}
 
+      {/* ── Patients Tab ── */}
       {activeTab === 'patients' && (
-        <div className="card p-6">
-          <h3 className="section-title mb-5">All Registered Patients</h3>
+        <div className="card animate-fade-in">
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <h3 className="section-title">All Registered Patients</h3>
+            <span className="text-xs text-slate-400">{allPatients.length} total</span>
+          </div>
           {allPatients.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="text-4xl mb-3">👥</div>
-              <p className="text-slate-400">No patients registered yet.</p>
+            <div className="text-center py-16">
+              <Users size={28} className="text-slate-200 mx-auto mb-2" />
+              <p className="text-sm text-slate-400">No patients registered yet</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -241,37 +302,39 @@ function ReceptionistDashboard() {
                 <thead>
                   <tr className="border-b border-slate-100">
                     {['Patient', 'Contact', 'Age', 'Gender', 'Blood', 'Actions'].map(h => (
-                      <th key={h} className="py-3 px-2 text-[11px] font-bold text-slate-400 uppercase tracking-wider">{h}</th>
+                      <th key={h} className="py-3 px-5 text-[11px] font-medium text-slate-400 uppercase tracking-wider">{h}</th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-50">
+                <tbody>
                   {allPatients.map(p => (
-                    <tr key={p._id} className="hover:bg-slate-50 transition-all">
-                      <td className="py-3 px-2">
+                    <tr key={p._id} className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors duration-100">
+                      <td className="py-3.5 px-5">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center text-blue-700 font-bold text-xs">
+                          <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 font-semibold text-xs shrink-0">
                             {p.user?.name?.charAt(0)}
                           </div>
-                          <span className="font-semibold text-slate-800">{p.user?.name}</span>
+                          <span className="font-medium text-slate-800">{p.user?.name}</span>
                         </div>
                       </td>
-                      <td className="py-3 px-2">
+                      <td className="py-3.5 px-5">
                         <p className="text-xs text-slate-600">{p.user?.phone}</p>
                         <p className="text-xs text-slate-400">{p.user?.email}</p>
                       </td>
-                      <td className="py-3 px-2 text-slate-600">{p.age}</td>
-                      <td className="py-3 px-2 text-slate-600">{p.gender}</td>
-                      <td className="py-3 px-2"><span className="badge bg-slate-100 text-slate-700">{p.bloodGroup}</span></td>
-                      <td className="py-3 px-2">
+                      <td className="py-3.5 px-5 text-xs text-slate-600">{p.age}</td>
+                      <td className="py-3.5 px-5 text-xs text-slate-600">{p.gender}</td>
+                      <td className="py-3.5 px-5">
+                        <span className="badge bg-slate-100 text-slate-600">{p.bloodGroup}</span>
+                      </td>
+                      <td className="py-3.5 px-5">
                         <div className="flex gap-2">
                           <button onClick={() => { selectExistingPatient(p); viewPatientAppointments(p); }}
-                            className="text-xs font-semibold text-blue-600 hover:bg-blue-50 px-2.5 py-1.5 rounded-lg border border-blue-200 transition-all">
-                            View
+                            className="btn-secondary text-xs py-1.5 px-2.5">
+                            <Eye size={12} /> View
                           </button>
                           <button onClick={() => handleRemovePatient(p._id)}
-                            className="text-xs font-semibold text-red-600 hover:bg-red-50 px-2.5 py-1.5 rounded-lg border border-red-200 transition-all">
-                            Remove
+                            className="btn-ghost text-xs py-1.5 px-2.5 text-red-500 hover:bg-red-50">
+                            <Trash2 size={12} />
                           </button>
                         </div>
                       </td>
@@ -284,38 +347,40 @@ function ReceptionistDashboard() {
         </div>
       )}
 
-      {/* Appointments Modal */}
+      {/* ── Appointments Modal ── */}
       {selectedPatient && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden">
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 flex justify-between items-center">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-100">
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
               <div>
-                <p className="text-blue-200 text-xs">Appointments for</p>
-                <h3 className="text-white font-bold text-lg">{selectedPatient.user?.name}</h3>
+                <p className="text-xs text-slate-400">Appointments for</p>
+                <h3 className="text-sm font-semibold text-slate-900 mt-0.5">{selectedPatient.user?.name}</h3>
               </div>
-              <button onClick={() => setSelectedPatient(null)} className="text-white/70 hover:text-white text-2xl font-light transition-colors">×</button>
+              <button onClick={() => setSelectedPatient(null)}
+                className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center transition-colors duration-150">
+                <X size={15} className="text-slate-500" />
+              </button>
             </div>
-            <div className="p-6">
+            <div className="p-5">
               {patientAppointments.length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="text-3xl mb-2">📋</div>
-                  <p className="text-slate-400 text-sm">No appointments found.</p>
+                <div className="text-center py-10">
+                  <p className="text-sm text-slate-400">No appointments found</p>
                 </div>
               ) : (
-                <div className="space-y-2.5 max-h-96 overflow-y-auto">
+                <div className="space-y-2 max-h-96 overflow-y-auto">
                   {patientAppointments.map(a => (
-                    <div key={a._id} className="flex items-center justify-between p-3 border border-slate-100 rounded-xl hover:bg-slate-50 transition-all">
+                    <div key={a._id} className="flex items-center justify-between p-3.5 border border-slate-100 rounded-xl hover:bg-slate-50/60 transition-colors duration-100">
                       <div>
-                        <p className="font-semibold text-slate-800 text-sm">{new Date(a.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
-                        <p className="text-xs text-slate-400">{a.doctor?.user?.name || '—'} · Token #{a.tokenNumber}</p>
+                        <p className="text-sm font-medium text-slate-800">
+                          {new Date(a.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-0.5">{a.doctor?.user?.name || '—'} · Token #{a.tokenNumber}</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className={`badge ${a.status === 'Cancelled' ? 'bg-red-100 text-red-600' : a.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' : a.status === 'Serving' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
-                          {a.status}
-                        </span>
+                        <span className={`badge ${STATUS_BADGE[a.status] || 'bg-slate-100 text-slate-500'}`}>{a.status}</span>
                         {['Scheduled', 'Serving'].includes(a.status) && (
                           <button onClick={() => handleCancelAppointment(a._id)}
-                            className="text-xs font-semibold text-red-600 hover:bg-red-50 px-2.5 py-1.5 rounded-lg border border-red-200 transition-all">
+                            className="text-xs font-medium text-red-500 hover:bg-red-50 border border-red-100 px-2.5 py-1.5 rounded-lg transition-all duration-150">
                             Cancel
                           </button>
                         )}
