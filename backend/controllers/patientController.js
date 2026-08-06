@@ -7,6 +7,58 @@ const Department = require('../models/Department');
 const Notification = require('../models/Notification');
 const queueService = require('../services/queueService');
 
+exports.getDoctorAvailability = async (req, res) => {
+  try {
+    const { hospitalId, departmentId, dateStr } = req.query;
+
+    const filter = {};
+    if (hospitalId) filter.hospital = hospitalId;
+    if (departmentId) filter.department = departmentId;
+
+    const doctors = await Doctor.find(filter)
+      .populate('user', 'name')
+      .populate('department', 'name')
+      .populate('hospital', 'name');
+
+    const targetDate = dateStr ? new Date(dateStr) : new Date();
+    targetDate.setUTCHours(0, 0, 0, 0);
+
+    const result = await Promise.all(doctors.map(async (doc) => {
+      const bookedCount = await Appointment.countDocuments({
+        doctor: doc._id,
+        date: targetDate,
+        status: { $in: ['Scheduled', 'Serving'] }
+      });
+      const slotsLeft = Math.max(0, doc.maxPatientsPerDay - bookedCount);
+      const dayOfWeek = targetDate.getUTCDay();
+      const worksOnDate = doc.workingDays.includes(dayOfWeek);
+
+      return {
+        doctorId: doc._id,
+        name: doc.user.name,
+        specialization: doc.specialization,
+        department: doc.department?.name,
+        hospital: doc.hospital?.name,
+        avgConsultationTimeMinutes: doc.avgConsultationTimeMinutes,
+        slotPreference: doc.slotPreference,
+        workingDays: doc.workingDays,
+        maxPatientsPerDay: doc.maxPatientsPerDay,
+        isAvailable: doc.isAvailable && !doc.isOnLeave && worksOnDate && slotsLeft > 0,
+        isOnLeave: doc.isOnLeave,
+        worksOnDate,
+        slotsLeft,
+        bookedCount,
+        queuePaused: doc.queuePaused,
+      };
+    }));
+
+    res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+
 exports.bookAppointment = async (req, res) => {
   try {
     const { doctorId, hospitalId, departmentId, dateStr, symptoms } = req.body;

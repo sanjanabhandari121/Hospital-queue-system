@@ -18,6 +18,7 @@ const server=http.createServer(app);
 
 app.use(cors({
     origin:[
+        "http://localhost:3000",
         "http://localhost:5173",
         "https://hospital-queue-system-one.vercel.app"
     ],
@@ -29,6 +30,7 @@ app.use(express.json());
 const io=new Server(server,{
     cors:{
         origin:[
+            "http://localhost:3000",
             "http://localhost:5173",
             "https://hospital-queue-system-one.vercel.app"
         ],

@@ -6,12 +6,14 @@ const {
   getPatientLiveState,
   getPatientHistory,
   cancelAppointment,
-  getNotifications
+  getNotifications,
+  getDoctorAvailability
 } = require('../controllers/patientController');
 
 router.use(protect);
 router.use(authorize('Patient'));
 
+router.get('/doctors/availability', getDoctorAvailability);
 router.post('/appointments', bookAppointment);
 router.get('/appointments/live', getPatientLiveState);
 router.get('/appointments/history', getPatientHistory);
